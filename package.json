@@ -4,7 +4,7 @@
   "description": "Strategy API for thebarcrawlers.com",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node server.js"",
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
