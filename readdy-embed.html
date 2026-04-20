@@ -1,0 +1,319 @@
+<!--
+  THEBARCRAWLERS.COM — STRATEGY TOOL
+  Paste this into Readdy's Custom Code / Embed panel.
+
+  Before pasting:
+  1. Deploy thebarcrawlers-api to Railway
+  2. Replace YOUR_RAILWAY_URL below with your actual Railway URL
+  3. Paste and save
+
+  That's it. No API key here — it lives safely on Railway.
+-->
+
+<div id="strategy-tool-wrap" style="max-width:680px; margin:0 auto; padding:0 20px;">
+
+  <!-- RESULT + LOADING inject here via JS -->
+  <div id="strategy-loading" style="display:none; background:#141414; border:1px solid #2a2a2a;
+       border-top:2px solid #E8A020; padding:40px 24px; text-align:center; border-radius:3px;">
+    <div id="tbc-spinner" style="width:22px; height:22px; border:2px solid #2a2a2a;
+         border-top-color:#E8A020; border-radius:50%; animation:tbc-spin 0.75s linear infinite;
+         margin:0 auto 14px;"></div>
+    <div id="tbc-loading-msg" style="font-size:0.72rem; letter-spacing:0.16em; text-transform:uppercase;
+         color:#888; font-family:monospace;"></div>
+    <div style="height:2px; background:#1e1e1e; margin-top:18px; border-radius:1px; overflow:hidden;">
+      <div id="tbc-prog" style="height:100%; width:0%; background:#E8A020; transition:width 0.35s ease;"></div>
+    </div>
+  </div>
+
+  <div id="strategy-result" style="display:none;"></div>
+
+</div>
+
+<style>
+  @keyframes tbc-spin { to { transform: rotate(360deg); } }
+  .tbc-section-body { display:none; }
+  .tbc-section-body.open { display:block; }
+  .tbc-chev { transition: transform 0.2s; display:inline-block; }
+  .tbc-chev.open { transform: rotate(180deg); }
+</style>
+
+<script>
+(function() {
+
+  // ── CONFIG — update this after Railway deploy ──────────────────
+  const API_URL = 'https://YOUR_RAILWAY_URL/api/strategy';
+  // ──────────────────────────────────────────────────────────────
+
+  const LOAD_MSGS = [
+    'Analyzing your venue…',
+    'Checking digital presence signals…',
+    'Building your growth strategy…',
+    'Writing your action plan…',
+    'Almost ready…'
+  ];
+
+  const ICONS = {
+    local_seo:'📍', google_ads:'🎯', content:'📱',
+    website:'🌐', ai_search:'🤖', events:'🎉', barcrwlr:'🍺'
+  };
+
+  function scoreColor(s) {
+    if (s >= 65) return '#5A8C60';
+    if (s >= 40) return '#B89040';
+    return '#C06050';
+  }
+
+  // ── Find the submit button Readdy built ────────────────────────
+  // Update this selector if Readdy uses a different class/id
+  function findSubmitBtn() {
+    return (
+      document.querySelector('[data-strategy-submit]') ||
+      document.querySelector('.strategy-submit') ||
+      document.querySelector('[id*="strategy"] button[type="submit"]') ||
+      document.querySelector('[id*="strategy"] button') ||
+      document.querySelector('button[class*="submit"]')
+    );
+  }
+
+  // ── Find form field values ─────────────────────────────────────
+  // Update these if Readdy generates different ids/names/placeholders
+  function getFieldValue(selectors) {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.value) return el.value.trim();
+    }
+    return '';
+  }
+
+  function getFormValues() {
+    return {
+      name: getFieldValue([
+        '#venue-name', '[name="venue-name"]',
+        '[placeholder*="Rusty"]', '[placeholder*="venue name"]',
+        'input:nth-of-type(1)'
+      ]),
+      city: getFieldValue([
+        '#city', '[name="city"]',
+        '[placeholder*="Nashville"]', '[placeholder*="city"]'
+      ]),
+      hood: getFieldValue([
+        '#neighborhood', '[name="neighborhood"]',
+        '[placeholder*="Broadway"]', '[placeholder*="neighborhood"]'
+      ]),
+      type: getFieldValue([
+        '#venue-type', '[name="venue-type"]',
+        'select:nth-of-type(1)'
+      ]),
+      challenge: getFieldValue([
+        '#challenge', '[name="challenge"]',
+        'select:nth-of-type(2)'
+      ]),
+    };
+  }
+
+  // ── Render gap pills ──────────────────────────────────────────
+  function renderGaps(gaps) {
+    return `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;">
+      ${gaps.map(g => `
+        <div style="background:#141414; border:1px solid #2a2a2a; padding:9px 11px; border-radius:2px;">
+          <div style="font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; color:#888; margin-bottom:3px; font-family:monospace;">
+            ${g.label}
+          </div>
+          <div style="font-size:0.8rem; font-weight:500; color:${
+            g.status==='bad' ? '#C06050' : g.status==='warn' ? '#B89040' : '#5A8C60'
+          };">${g.value}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // ── Render strategy sections ──────────────────────────────────
+  function renderSections(sections) {
+    return sections.map((s, i) => `
+      <div style="background:#141414; border:1px solid #2a2a2a; margin-bottom:6px; border-radius:2px; overflow:hidden;">
+        <div onclick="tbcToggle(${i})"
+             style="display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer; user-select:none;">
+          <span style="font-size:14px; width:22px; text-align:center; flex-shrink:0;">${ICONS[s.id] || '✦'}</span>
+          <span style="flex:1; font-size:0.85rem; font-weight:500; color:#E8E2D8;">${s.title}</span>
+          <span class="tbc-chev${i===0?' open':''}" id="tbc-chev-${i}" style="font-size:0.6rem; color:#666;">▼</span>
+        </div>
+        <div id="tbc-body-${i}" class="tbc-section-body${i===0?' open':''}"
+             style="padding:0 16px 14px 48px;">
+          ${s.actions.map(a => `
+            <div style="padding-top:10px; margin-top:4px; border-top:1px solid #1e1e1e;">
+              <div style="font-size:0.8rem; font-weight:500; color:#E8E2D8; margin-bottom:3px;">${a.title}</div>
+              <div style="font-size:0.75rem; color:#A09890; line-height:1.65;">${a.desc}
+                ${a.timeline ? `<span style="color:#E8A020; font-size:0.68rem; margin-left:6px;">${a.timeline}</span>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  // ── Render full result ────────────────────────────────────────
+  function renderResult(data, venueName, cityName) {
+    const score = data.score || 30;
+    const col   = scoreColor(score);
+    const tag   = score >= 65 ? 'Decent foundation' : score >= 40 ? 'Significant gaps' : 'Critical gaps';
+
+    return `
+      <!-- Score -->
+      <div style="background:#141414; border:1px solid #2a2a2a; border-top:2px solid #E8A020;
+                  padding:20px 24px; margin-bottom:8px; border-radius:2px;">
+        <div style="font-size:1rem; font-weight:600; color:#E8E2D8; margin-bottom:10px;">
+          ${venueName} · ${cityName}
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:0.6rem; letter-spacing:0.14em; color:#888; text-transform:uppercase; font-family:monospace; white-space:nowrap;">
+            Digital score
+          </span>
+          <div style="flex:1; height:3px; background:#2a2a2a; border-radius:2px; overflow:hidden;">
+            <div style="height:100%; width:${score}%; background:${col}; transition:width 0.8s ease;"></div>
+          </div>
+          <span style="font-size:0.75rem; font-weight:500; color:${col}; white-space:nowrap; font-family:monospace;">
+            ${score}/100 — ${tag}
+          </span>
+        </div>
+      </div>
+
+      <!-- Gaps -->
+      ${renderGaps(data.gaps || [])}
+
+      <!-- Sections -->
+      ${renderSections(data.sections || [])}
+
+      <!-- CTA -->
+      <div style="background:#141414; border:1px solid rgba(232,160,32,0.22);
+                  padding:24px; text-align:center; margin-top:8px; border-radius:2px;">
+        <div style="font-size:1.05rem; font-weight:600; color:#E8E2D8; margin-bottom:6px;">
+          ${data.cta_headline || 'We'll build the system. You run the bar.'}
+        </div>
+        <div style="font-size:0.82rem; color:#A09890; line-height:1.6; margin-bottom:18px; max-width:480px; margin-left:auto; margin-right:auto;">
+          ${data.cta_sub || 'The Packed House System is a done-for-you AI marketing engine built for bars like yours.'}
+        </div>
+        <a href="mailto:hello@thebarcrawlers.com?subject=Pilot Inquiry — ${encodeURIComponent(venueName)}"
+           style="display:block; background:#E8A020; color:#000; font-weight:600; font-size:0.85rem;
+                  letter-spacing:0.08em; padding:13px; text-decoration:none; border-radius:2px;
+                  text-transform:uppercase;">
+          Apply for a pilot spot →
+        </a>
+        <div style="margin-top:10px; font-size:0.72rem; color:#666;">
+          No pitch. No pressure. We'll tell you honestly if we can help.
+        </div>
+      </div>
+
+      <!-- Reset -->
+      <button onclick="tbcReset()"
+              style="background:none; border:none; color:#666; font-size:0.75rem;
+                     text-decoration:underline; cursor:pointer; margin-top:14px; display:block;">
+        ← Analyze another venue
+      </button>
+    `;
+  }
+
+  // ── Toggle section ────────────────────────────────────────────
+  window.tbcToggle = function(i) {
+    const body = document.getElementById('tbc-body-' + i);
+    const chev = document.getElementById('tbc-chev-' + i);
+    if (!body) return;
+    const open = body.classList.contains('open');
+    body.classList.toggle('open', !open);
+    if (chev) chev.classList.toggle('open', !open);
+  };
+
+  // ── Reset ─────────────────────────────────────────────────────
+  window.tbcReset = function() {
+    document.getElementById('strategy-result').style.display  = 'none';
+    document.getElementById('strategy-result').innerHTML      = '';
+    document.getElementById('strategy-loading').style.display = 'none';
+    // Show the form again
+    const form = document.querySelector('[id*="strategy"] form, [class*="strategy"] form, form');
+    if (form) form.style.display = '';
+    const btn = findSubmitBtn();
+    if (btn) btn.disabled = false;
+  };
+
+  // ── Main: wire up on DOM ready ────────────────────────────────
+  function init() {
+    const btn = findSubmitBtn();
+    if (!btn) {
+      // Retry if Readdy hasn't rendered the form yet
+      setTimeout(init, 500);
+      return;
+    }
+
+    btn.addEventListener('click', async function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const { name, city, hood, type, challenge } = getFormValues();
+
+      if (!name || !city) {
+        alert('Please enter your venue name and city to continue.');
+        return;
+      }
+
+      // Hide form, show loading
+      const form = btn.closest('form') || btn.closest('[class*="card"]');
+      if (form) form.style.display = 'none';
+      btn.disabled = true;
+
+      const loadingEl = document.getElementById('strategy-loading');
+      const resultEl  = document.getElementById('strategy-result');
+      loadingEl.style.display = 'block';
+      resultEl.style.display  = 'none';
+
+      // Progress animation
+      let prog = 0, mi = 0;
+      const progEl = document.getElementById('tbc-prog');
+      const msgEl  = document.getElementById('tbc-loading-msg');
+      if (msgEl) msgEl.textContent = LOAD_MSGS[0];
+
+      const timer = setInterval(() => {
+        prog = Math.min(prog + Math.random() * 9, 88);
+        if (progEl) progEl.style.width = prog + '%';
+        const ni = Math.min(Math.floor(prog / 20), LOAD_MSGS.length - 1);
+        if (ni !== mi && msgEl) { mi = ni; msgEl.textContent = LOAD_MSGS[ni]; }
+      }, 380);
+
+      try {
+        const res = await fetch(API_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ name, city, hood, type, challenge }),
+        });
+
+        clearInterval(timer);
+        if (progEl) progEl.style.width = '100%';
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Server error ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        setTimeout(() => {
+          loadingEl.style.display = 'none';
+          resultEl.innerHTML      = renderResult(data, name, city);
+          resultEl.style.display  = 'block';
+          resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 400);
+
+      } catch (err) {
+        clearInterval(timer);
+        loadingEl.style.display = 'none';
+        if (form) form.style.display = '';
+        btn.disabled = false;
+        alert('Something went wrong generating your strategy. Please try again.\n\n' + err.message);
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
+</script>
