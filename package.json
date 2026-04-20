@@ -1,11 +1,9 @@
 {
   "name": "thebarcrawlers-api",
   "version": "1.0.0",
-  "description": "Strategy API for thebarcrawlers.com",
-  "main": "src/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"",
-    "dev": "node --watch src/server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
